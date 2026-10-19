@@ -1,4 +1,10 @@
-# ⛽ CGD Gas Allocation under Scarcity – LP Website & Simulator
+# ⛽ GAS-OPTIC
+**A Demand- and Supply-Scarcity-Based Optimization Decision Support System Control Tower for Gas Allocation in City Gas Distribution**  
+*Gas Allocation and Supply Optimization through Intelligent Control Tower*
+
+FDP Course: Decision Science for Enterprise Excellence (DSEE) · Organiser: Indian Foundation for Quality Management (IFQM), Bengaluru  
+Authors: Dr Sandeep Sharda and Dr Pradeep Behera, Assistant Professors, Symbiosis Institute of Operations Management, Nashik · Supervisor cum Mentor: Dr Nitin Sachdeva, IFQM
+
 
 A Streamlit website and simulator for allocating natural gas across a City Gas Distribution (CGD) network
 (Mahanagar Gas Ltd, Mumbai MMR) when supply is scarce. The optimisation is a linear programme solved with **PuLP (CBC)**.
@@ -7,12 +13,15 @@ A Streamlit website and simulator for allocating natural gas across a City Gas D
 
 | Page | Contents |
 |---|---|
-| 🏠 Home | Motivation, problem statement, project objectives, SDG goals (7, 11, 13, 9, 12, 3), how to use |
+| 🏠 Home | Title & credits; Motivation (background, opportunity, business case from the project PPT); problem statement (platform + ours); objectives incl. shadow prices and per-scenario output buttons; SDGs; how to use |
 | 🧮 Model & formulation | Index sets, parameters, objective (problem-statement min-cost + extended regulated profit-max), constraints, diagnosis method, poster |
 | ⚙️ Simulator | Same tabs as the earlier dashboard – **Inputs, Results, Network diagram, Corridors, Shadow prices, Service level (70–95 %), Sensitivity, Export** – plus a new **Profitability** tab |
 | 🧪 Scenarios (5) | Five real CGD scarcity scenarios, compared side by side, with automatic root-cause diagnosis |
+| 🆚 Compare scenarios | Pick 2+ cases, choose a service level; as-is vs optimised results, best/worst highlighted, reasons |
 | 🔎 Scarcity diagnosis & response | Supplier-side vs MGL-side verdict, optimised profit-maximising and regulation-compliant response, action plan |
 | 🏛 Priority & regulations | Curtailment order (domestic PNG never cut), rules built into the model, compliance check |
+| 🚀 Future expansion & outlook | Scalability options, price escalation trend & 3-year forecast, uncertainties, 2-year demand–supply outlook |
+| 📖 Terminology | Plain-language glossary of gas, regulatory and model terms |
 | 📚 References | PNGRB (incl. T4S, QoS, IMS, ERDMP), MoPNG/PPAC, MGL disclosures, SDGs, standard books |
 
 **Data sources (sidebar):**

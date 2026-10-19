@@ -778,3 +778,100 @@ def compliance(R) -> pd.DataFrame:
                      "Months below floor": months_below,
                      "Status": "✅ Compliant" if months_below == 0 else "❌ Breach"})
     return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------------------------------
+# Route status (for the control-tower network diagram)
+# --------------------------------------------------------------------------------------
+def route_status(R, month="avg") -> pd.DataFrame:
+    """Per arc: flow, corridor utilisation, shadow price and status (Optimal / Bottleneck / Spare)."""
+    fl, ut, sh = R["flows"], R["util"], R["shadow"]
+    cs = sh[sh.Type == "Corridor capacity"].copy()
+    cs["Corridor"] = cs.Item.str.split().str[-1].astype(int)
+    if month == "avg":
+        f = fl.groupby(["Arc", "Corridor", "From", "To", "Cost"], as_index=False).Flow.mean()
+        u = ut.groupby("Corridor").agg(Utilization=("Utilization", "mean"), Peak=("Utilization", "max"),
+                                       Capacity=("Capacity", "mean"), CFlow=("Flow", "mean"))
+        s = cs.groupby("Corridor").agg(Shadow=("Shadow_Price", "mean"), Binding=("Binding", "sum"))
+    else:
+        f = fl[fl.Month == month][["Arc", "Corridor", "From", "To", "Cost", "Flow"]]
+        u = ut[ut.Month == month].set_index("Corridor")[["Utilization", "Capacity", "Flow"]].rename(columns={"Flow": "CFlow"})
+        u["Peak"] = u["Utilization"]
+        s = cs[cs.Month == month].set_index("Corridor")[["Shadow_Price", "Binding"]].rename(columns={"Shadow_Price": "Shadow"})
+        s["Binding"] = s["Binding"].astype(int)
+    f = f.merge(u, left_on="Corridor", right_index=True, how="left").merge(s, left_on="Corridor", right_index=True, how="left")
+    tot = f.groupby("Corridor").Flow.transform("max").replace(0, np.nan)
+
+    def status(r):
+        if r.Flow <= 1e-9:
+            return "Spare"
+        if (r.Shadow or 0) > 1e-6 and (r.Peak or 0) >= 0.995:
+            return "Bottleneck"
+        return "Optimal"
+    f["Status"] = f.apply(status, axis=1)
+    f["Share_of_corridor"] = (f.Flow / tot).fillna(0)
+    return f
+
+
+# --------------------------------------------------------------------------------------
+# 2-year demand–supply outlook
+# --------------------------------------------------------------------------------------
+def outlook(data: dict, g1=0.08, g2=0.112, apm_decline=0.05, horizon=24) -> dict:
+    """Project the last 12 months of demand by sector and contracted supply by source forward."""
+    M = months_of(data)
+    T = len(M)
+    last = M[-12:] if T >= 12 else M
+    sec = dict(zip(data["nodes"].Node.astype(str), data["nodes"].Sector))
+    dem = data["demand"].assign(Sector=data["demand"].Node.astype(str).map(sec)).groupby("Sector")[last].sum()
+    con = data["contract"].assign(Source=data["contract"].Source.astype(str)).set_index("Source")[last]
+    lab0 = data["settings"]["month_labels"]
+    import datetime as _dt
+    try:
+        d0 = _dt.datetime.strptime(lab0[-1], "%b-%y")
+        labels = []
+        y, m = d0.year, d0.month
+        for _ in range(horizon):
+            m += 1
+            if m > 12:
+                m, y = 1, y + 1
+            labels.append(_dt.date(y, m, 1).strftime("%b-%y"))
+    except Exception:  # noqa: BLE001
+        labels = [f"F{i + 1}" for i in range(horizon)]
+    drows, srows = [], []
+    for i in range(horizon):
+        base_col = last[i % len(last)]
+        yr = i // 12
+        gf = (1 + g1) if yr == 0 else (1 + g1) * (1 + g2)
+        for sct, v in dem[base_col].items():
+            drows.append({"i": i, "Label": labels[i], "Sector": sct, "Demand": float(v) * gf})
+        for s, v in con[base_col].items():
+            f = (1 - apm_decline) ** (yr + 1) if s.upper().startswith(("APM", "NWG")) else 1.0
+            if s.upper().startswith(("RLNG_S", "SPOT")):
+                continue      # spot is not contracted supply
+            srows.append({"i": i, "Label": labels[i], "Source": s, "Supply": float(v) * f})
+    D = pd.DataFrame(drows); Sdf = pd.DataFrame(srows)
+    tot = D.groupby(["i", "Label"], as_index=False).Demand.sum().merge(
+        Sdf.groupby(["i", "Label"], as_index=False).Supply.sum(), on=["i", "Label"], how="left").fillna(0)
+    tot["Gap"] = (tot.Demand - tot.Supply).clip(lower=0)
+    return dict(demand=D, supply=Sdf, total=tot)
+
+
+# --------------------------------------------------------------------------------------
+# Multi-case comparison
+# --------------------------------------------------------------------------------------
+def case_summary(data: dict, p: dict, key: str, optimise=True) -> dict:
+    d = apply_scenario(data, key)
+    base = solve(d, dict(p, mitigation=False))
+    out = {"key": key, "base": base, "opt": None, "diag": None, "rec": None}
+    if base["status"] != "Optimal":
+        return out
+    if optimise:
+        rp = response_plan(d, p)
+        pf, sf = rp["profit_first"], rp["service_first"]
+        ok = lambda r: r["status"] == "Optimal" and (compliance(r)["Status"] == "✅ Compliant").all()  # noqa: E731
+        out["opt"], out["rec"] = (pf, "Profit-first") if ok(pf) else ((sf, "Service-first") if ok(sf) else (pf, "Profit-first"))
+    try:
+        out["diag"] = diagnose(d, p)
+    except Exception:  # noqa: BLE001
+        out["diag"] = None
+    return out
